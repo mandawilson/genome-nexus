@@ -43,6 +43,9 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.client.HttpClientErrorException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,6 +58,9 @@ import java.util.List;
 @RequestMapping(value = "/")
 public class AnnotationController
 {
+
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
+
     private final VariantAnnotationService variantAnnotationService;
     private final VariantAnnotationRepository variantAnnotationRepository;
     private final IsoformOverrideService isoformOverrideService;
@@ -376,11 +382,13 @@ public class AnnotationController
                 // in case of web service error, do not terminate the whole process.
                 // just copy the response body (error message) for this variant
                 variantAnnotation = new VariantAnnotation(variant, e.getResponseBodyAsString());
+                logger.error("getVariantAnnotation(" + variant + ") -- " + e.toString());
             }
             catch (IOException e) {
                 // in case of parse error, do not terminate the whole process.
                 // just send the raw annotationJSON to the client
                 variantAnnotation = new VariantAnnotation(variant, annotationJSON);
+                logger.error("getVariantAnnotation(" + variant + ") -- " + e.toString());
             }
         }
 
