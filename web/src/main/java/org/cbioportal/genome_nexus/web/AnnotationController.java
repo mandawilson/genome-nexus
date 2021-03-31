@@ -144,6 +144,7 @@ public class AnnotationController
         return fetchVariantAnnotationPOST(variants, isoformOverrideSource, token, fields);
     }
 
+    //TODO: remove the business logic into a service, or wrap the annotation service inside a validated annotation service (both for hgvs and genomicloc)
     @ApiOperation(value = "Retrieves VEP annotation for the provided list of variants",
         nickname = "fetchVariantAnnotationPOST")
     @RequestMapping(value = "/annotation",
