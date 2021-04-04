@@ -34,20 +34,18 @@ package org.cbioportal.genome_nexus.web;
 
 import io.swagger.annotations.*;
 import java.util.*;
-import org.cbioportal.genome_nexus.component.annotation.NotationConverter;
 import org.cbioportal.genome_nexus.model.GenomicLocation;
 import org.cbioportal.genome_nexus.model.VariantAnnotation;
 import org.cbioportal.genome_nexus.service.GenomicLocationAnnotationService;
-import org.cbioportal.genome_nexus.service.internal.VerifiedGenomicLocationAnnotationServiceImpl;
 import org.cbioportal.genome_nexus.service.SelectedAnnotationService;
 import org.cbioportal.genome_nexus.service.VariantAnnotationService;
 import org.cbioportal.genome_nexus.service.exception.VariantAnnotationNotFoundException;
 import org.cbioportal.genome_nexus.service.exception.VariantAnnotationQueryMixedFormatException;
 import org.cbioportal.genome_nexus.service.exception.VariantAnnotationWebServiceException;
+import org.cbioportal.genome_nexus.service.internal.VerifiedGenomicLocationAnnotationServiceImpl;
 import org.cbioportal.genome_nexus.util.TokenMapConverter;
 import org.cbioportal.genome_nexus.web.config.PublicApi;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -64,23 +62,16 @@ public class AnnotationController
     private final VariantAnnotationService dbsnpAnnotationService;
     private final GenomicLocationAnnotationService verifiedGenomicLocationAnnotationService;
     private final SelectedAnnotationService selectedAnnotationService;
-    private final NotationConverter notationConverter; 
-    private final Boolean isRegionAnnotationEnabled; 
     private final TokenMapConverter tokenMapConverter;
 
     @Autowired
     public AnnotationController(VariantAnnotationService dbsnpVariantAnnotationService,
                                 GenomicLocationAnnotationService verifiedGenomicLocationAnnotationServiceImpl,
-                                SelectedAnnotationService selectedAnnotationService,
-                                NotationConverter notationConverter,
-                                @Value("${gn_vep.region.url:}")
-                                String vepRegionUrl)
+                                SelectedAnnotationService selectedAnnotationService)
     {
         this.dbsnpAnnotationService = dbsnpVariantAnnotationService;
         this.verifiedGenomicLocationAnnotationService = verifiedGenomicLocationAnnotationServiceImpl;
         this.selectedAnnotationService = selectedAnnotationService;
-        this.notationConverter = notationConverter;
-        this.isRegionAnnotationEnabled = vepRegionUrl != null && vepRegionUrl.length() > 0;
         this.tokenMapConverter = new TokenMapConverter();
     }
 
