@@ -46,21 +46,26 @@ import org.springframework.stereotype.Service;
 
 import java.util.*;
 
+import org.apache.commons.logging.LogFactory;
+import org.apache.commons.logging.Log;
+
 @Service
 public class SelectedAnnotationServiceImpl implements SelectedAnnotationService {
-    private final HgvsVariantAnnotationService hgvsAnnotationService;
+    private final VariantAnnotationService verifiedHgvsVariantAnnotationService;
     private final GenomicLocationAnnotationService genomicLocationAnnotationService;
     private final NotationConverter notationConverter; 
     private final Boolean isRegionAnnotationEnabled; 
 
+private static final Log LOG = LogFactory.getLog(SelectedAnnotationServiceImpl.class);
+
     @Autowired
     public SelectedAnnotationServiceImpl(
-            HgvsVariantAnnotationService hgvsVariantAnnotationService,
+            VariantAnnotationService verifiedHgvsVariantAnnotationService,
             GenomicLocationAnnotationService genomicLocationAnnotationServiceImpl,
             NotationConverter notationConverter,
             @Value("${gn_vep.region.url:}")
             String vepRegionUrl) {
-        this.hgvsAnnotationService = hgvsVariantAnnotationService;
+        this.verifiedHgvsVariantAnnotationService = verifiedHgvsVariantAnnotationService;
         this.genomicLocationAnnotationService = genomicLocationAnnotationServiceImpl;
         this.notationConverter = notationConverter;
         this.isRegionAnnotationEnabled = vepRegionUrl != null && vepRegionUrl.length() > 0;
@@ -78,7 +83,7 @@ public class SelectedAnnotationServiceImpl implements SelectedAnnotationService 
             return genomicLocationAnnotationService.getAnnotation(variantAsGenomicLocation.toString(), isoformOverrideSource, token, fields);
         } else {
             // TODO: do we support configuration of Genome-Nexus where non-hgvs variants will arrive at /annotation/{variant} endpoint and they get sent to a (non-hgvs) vep.url ? If not, make this service hgvs only.
-            return hgvsAnnotationService.getAnnotation(variant, isoformOverrideSource, token, fields);
+            return verifiedHgvsVariantAnnotationService.getAnnotation(variant, isoformOverrideSource, token, fields);
         }
     }
 
@@ -94,7 +99,7 @@ public class SelectedAnnotationServiceImpl implements SelectedAnnotationService 
         } else {
             // all variants will be sent to the hgvsAnnotationService, so non-hgvs formatted variants will fail annotation and hgvs formatted variants may succeed
             // TODO: do we support configuration of Genome-Nexus where non-hgvs variants will arrive at /annotation endpoint and they get sent to a (non-hgvs) vep.url ? If not, make this service hgvs only.
-            return hgvsAnnotationService.getAnnotations(variants, isoformOverrideSource, token, fields);
+            return verifiedHgvsVariantAnnotationService.getAnnotations(variants, isoformOverrideSource, token, fields);
         }
     }
 
