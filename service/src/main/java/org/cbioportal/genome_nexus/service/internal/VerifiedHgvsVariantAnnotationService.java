@@ -35,7 +35,6 @@ package org.cbioportal.genome_nexus.service.internal;
 import java.util.*;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.cbioportal.genome_nexus.component.annotation.NotationConverter;
 import org.cbioportal.genome_nexus.model.VariantAnnotation;
 import org.cbioportal.genome_nexus.service.*;
 import org.cbioportal.genome_nexus.service.cached.CachedVariantAnnotationFetcher;
@@ -162,7 +161,7 @@ public class VerifiedHgvsVariantAnnotationService implements VariantAnnotationSe
             return "";
         }
         return alleleString.substring(0,slashPosition);
-        
+
     }
 
     private VariantAnnotation createFailedAnnotation(String originalVariantQuery, String originalVariant)
