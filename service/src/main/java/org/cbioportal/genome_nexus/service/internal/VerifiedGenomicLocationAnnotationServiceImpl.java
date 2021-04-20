@@ -55,6 +55,9 @@ public class VerifiedGenomicLocationAnnotationServiceImpl implements GenomicLoca
     private final GenomicLocationAnnotationService genomicLocationAnnotationService;
 
     @Autowired
+    private NotationConverter notationConverter;
+
+    @Autowired
     public VerifiedGenomicLocationAnnotationServiceImpl(GenomicLocationAnnotationService genomicLocationAnnotationService)
     {
         this.genomicLocationAnnotationService = genomicLocationAnnotationService;
@@ -64,20 +67,30 @@ public class VerifiedGenomicLocationAnnotationServiceImpl implements GenomicLoca
     public VariantAnnotation getAnnotation(GenomicLocation genomicLocation)
         throws VariantAnnotationNotFoundException, VariantAnnotationWebServiceException
     {
-        return this.genomicLocationAnnotationService.getAnnotation(genomicLocation);
+        VariantAnnotation annotation = genomicLocationAnnotationService.getAnnotation(genomicLocation);
+        VariantAnnotation verifiedAnnotation = verifyOrFailAnnotation(annotation);
+        return verifiedAnnotation;
     }
 
     @Override
     public VariantAnnotation getAnnotation(String genomicLocation)
         throws VariantAnnotationNotFoundException, VariantAnnotationWebServiceException
     {
-        return this.genomicLocationAnnotationService.getAnnotation(genomicLocation);
+        VariantAnnotation annotation = genomicLocationAnnotationService.getAnnotation(genomicLocation);
+        VariantAnnotation verifiedAnnotation = verifyOrFailAnnotation(annotation);
+        return verifiedAnnotation;
     }
 
     @Override
     public List<VariantAnnotation> getAnnotations(List<GenomicLocation> genomicLocations)
     {
-        return this.genomicLocationAnnotationService.getAnnotations(genomicLocations);
+        List<VariantAnnotation> annotations = genomicLocationAnnotationService.getAnnotations(genomicLocations);
+        for (int index = 0; index < annotations.size(); index = index + 1) {
+            VariantAnnotation annotation = annotations.get(index);
+            VariantAnnotation verifiedAnnotation = verifyOrFailAnnotation(annotation);
+            annotations.set(index, verifiedAnnotation);
+        }
+        return annotations;
     }
 
     @Override
@@ -87,7 +100,9 @@ public class VerifiedGenomicLocationAnnotationServiceImpl implements GenomicLoca
                                            List<String> fields)
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
-        return this.genomicLocationAnnotationService.getAnnotation(genomicLocation, isoformOverrideSource, token, fields);
+        VariantAnnotation annotation = genomicLocationAnnotationService.getAnnotation(genomicLocation, isoformOverrideSource, token, fields);
+        VariantAnnotation verifiedAnnotation = verifyOrFailAnnotation(annotation);
+        return verifiedAnnotation;
     }
 
     @Override
@@ -96,7 +111,89 @@ public class VerifiedGenomicLocationAnnotationServiceImpl implements GenomicLoca
                                                                     Map<String, String> token,
                                                                     List<String> fields)
     {
-        return this.genomicLocationAnnotationService.getAnnotations(genomicLocations, isoformOverrideSource, token, fields);
+        List<VariantAnnotation> annotations = genomicLocationAnnotationService.getAnnotations(genomicLocations, isoformOverrideSource, token, fields);
+        for (int index = 0; index < annotations.size(); index = index + 1) {
+            VariantAnnotation annotation = annotations.get(index);
+            VariantAnnotation verifiedAnnotation = verifyOrFailAnnotation(annotation);
+            annotations.set(index, verifiedAnnotation);
+        }
+        return annotations;
     }
 
+    private VariantAnnotation verifyOrFailAnnotation(VariantAnnotation annotation)
+    {
+        String originalVariantQuery = annotation.getOriginalVariantQuery(); // save for failed response
+        String originalVariant = annotation.getVariant(); // save for failed response
+        String originalQuery = originalVariantQuery;
+        if (originalVariantQuery == null || originalVariantQuery.length() == 0) {
+            originalQuery = originalVariant;
+        }
+        String providedReferenceAllele = notationConverter.parseGenomicLocation(originalQuery).getReferenceAllele();
+        if (providedReferenceAllele.length() == 0) {
+            // no comparison possible : allele not specified in query
+            return annotation;
+        }
+        LOG.debug("verifying providedReferenceAllele : '" + providedReferenceAllele + "'");
+        String responseReferenceAllele = getReferenceAlleleFromAnnotation(annotation);
+        if (responseReferenceAllele.length() != providedReferenceAllele.length()) {
+            // for altered length Deletion-Insertion responses, recover full reference allele with followup query
+            String followUpVariant = constructFollowUpQuery(originalQuery);
+            if (followUpVariant.length() > 0) {
+                try {
+                    LOG.debug("performing followup annotation request to get VEP genome assembly sequence : '" + providedReferenceAllele + "'");
+                    VariantAnnotation followUpAnnotation = genomicLocationAnnotationService.getAnnotation(followUpVariant);
+                    responseReferenceAllele = getReferenceAlleleFromAnnotation(followUpAnnotation);
+                } catch (VariantAnnotationNotFoundException|VariantAnnotationWebServiceException vae) {
+                    // followup validation failed - could not verify provided allele, so accept failure
+                    LOG.debug("followup annotation request failed - Reference_Allele could not be verified");
+                }
+            }
+        }
+        if (providedReferenceAllele.equals(responseReferenceAllele)) {
+            // validation complete
+            return annotation;
+        }
+        // return annotation failure
+        return createFailedAnnotation(originalVariantQuery, originalVariant);
+    }
+
+    private String constructFollowUpQuery(String originalQuery)
+    {
+        // create a deletion variant covering the referenced genome positions
+        // this code should only run for delins variants where part of the TumorSeq allele matches the reference genome
+        GenomicLocation followUpQueryGenomicLocation = notationConverter.parseGenomicLocation(originalQuery);
+        followUpQueryGenomicLocation.setVariantAllele("-");
+        if (followUpQueryGenomicLocation.getReferenceAllele().equals("-")) {
+            return ""; // unexpectantly called constructFollowUpQuery on insertion query -- this annotation will fail
+        }
+        return followUpQueryGenomicLocation.toString();
+    }
+
+    private String getReferenceAlleleFromAnnotation(VariantAnnotation annotation)
+    {
+        String alleleString = annotation.getAlleleString();
+        if (alleleString == null) {
+            // maybe original annotation attempt failed
+            return "";
+        }
+        int slashPosition = alleleString.indexOf('/');
+        if (slashPosition == -1 || slashPosition == 0) {
+            return "";
+        }
+        return alleleString.substring(0,slashPosition);
+
+    }
+
+    private VariantAnnotation createFailedAnnotation(String originalVariantQuery, String originalVariant)
+    {
+        VariantAnnotation annotation = new VariantAnnotation();
+        if (originalVariantQuery != null && originalVariantQuery.length() > 0) {
+            annotation.setOriginalVariantQuery(originalVariantQuery);
+        }
+        if (originalVariant != null && originalVariant.length() > 0) {
+            annotation.setVariant(originalVariant);
+        }
+        annotation.setSuccessfullyAnnotated(false);
+        return annotation;
+    }
 }

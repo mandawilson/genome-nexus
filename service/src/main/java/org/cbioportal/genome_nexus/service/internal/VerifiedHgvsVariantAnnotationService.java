@@ -121,7 +121,7 @@ public class VerifiedHgvsVariantAnnotationService implements VariantAnnotationSe
             String followUpVariant = constructFollowUpQuery(originalQuery);
             if (followUpVariant.length() > 0) {
                 try {
-                    LOG.debug("performing followup annotation request to get VEP genome assembly sequene : '" + providedReferenceAllele + "'");
+                    LOG.debug("performing followup annotation request to get VEP genome assembly sequence : '" + providedReferenceAllele + "'");
                     VariantAnnotation followUpAnnotation = hgvsVariantAnnotationService.getAnnotation(followUpVariant);
                     responseReferenceAllele = getReferenceAlleleFromAnnotation(followUpAnnotation);
                 } catch (VariantAnnotationNotFoundException|VariantAnnotationWebServiceException vae) {
