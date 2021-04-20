@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Memorial Sloan-Kettering Cancer Center.
+ * Copyright (c) 2015 - 2021 Memorial Sloan-Kettering Cancer Center.
  *
  * This library is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY, WITHOUT EVEN THE IMPLIED WARRANTY OF MERCHANTABILITY OR FITNESS
@@ -88,20 +88,36 @@ public class GenomicLocationAnnotationServiceImpl implements GenomicLocationAnno
     public VariantAnnotation getAnnotation(GenomicLocation genomicLocation)
         throws VariantAnnotationNotFoundException, VariantAnnotationWebServiceException
     {
-        return this.variantAnnotationService.getAnnotation(this.notationConverter.genomicToEnsemblRestRegion(genomicLocation));
+        VariantAnnotation variantAnnotation = this.variantAnnotationService.getAnnotation(this.notationConverter.genomicToEnsemblRestRegion(genomicLocation));
+        genomicLocation.setOriginalInput(genomicLocation.toString());
+        variantAnnotation.setOriginalVariantQuery(genomicLocation.getOriginalInput());
+        return variantAnnotation;
     }
 
     @Override
     public VariantAnnotation getAnnotation(String genomicLocation)
         throws VariantAnnotationNotFoundException, VariantAnnotationWebServiceException
     {
-        return this.getAnnotation(this.notationConverter.parseGenomicLocation(genomicLocation));
+        VariantAnnotation variantAnnotation = this.getAnnotation(this.notationConverter.parseGenomicLocation(genomicLocation));
+        variantAnnotation.setOriginalVariantQuery(genomicLocation);
+        return variantAnnotation;
     }
 
     @Override
     public List<VariantAnnotation> getAnnotations(List<GenomicLocation> genomicLocations)
     {
-        return this.variantAnnotationService.getAnnotations(this.notationConverter.genomicToEnsemblRestRegion(genomicLocations));
+        Map<String, String> convertedVarsToOrigVarQueryMap = mapConvertedVarsToOrigVarQuery(genomicLocations);
+        List<VariantAnnotation> variantAnnotations = new ArrayList<>();
+        this.variantAnnotationService.getAnnotations(
+                /////////////    WHY IS THE NEXT LINE DIFFERENT LOWER DOWN IN THE CODE? ( this.genomicLocationsToVariantFormats.convert(genomicLocations), )
+                this.notationConverter.genomicToEnsemblRestRegion(genomicLocations)
+        ).stream().map((a) -> {
+            a.setOriginalVariantQuery(convertedVarsToOrigVarQueryMap.get(a.getVariant()));
+            return a;
+        }).forEachOrdered((a) -> {
+            variantAnnotations.add(a);
+        });
+        return variantAnnotations;
     }
 
     @Override
@@ -111,12 +127,13 @@ public class GenomicLocationAnnotationServiceImpl implements GenomicLocationAnno
                                            List<String> fields)
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
-        return this.variantAnnotationService.getAnnotation(
-            this.genomicLocationStringToVariantFormat.convert(genomicLocation),
-            isoformOverrideSource,
-            token,
-            fields
-        );
+        VariantAnnotation variantAnnotation = this.variantAnnotationService.getAnnotation(
+                this.genomicLocationStringToVariantFormat.convert(genomicLocation),
+                isoformOverrideSource,
+                token,
+                fields);
+        variantAnnotation.setOriginalVariantQuery(genomicLocation);
+        return variantAnnotation;
     }
 
     @Override
@@ -125,13 +142,7 @@ public class GenomicLocationAnnotationServiceImpl implements GenomicLocationAnno
                                                                     Map<String, String> token,
                                                                     List<String> fields)
     {
-        Map<String, String> convertedVarsToOrigVarQueryMap = new HashMap<>();
-        genomicLocations.forEach((gl) -> {
-            gl.setOriginalInput(gl.toString());
-            convertedVarsToOrigVarQueryMap.put(this.genomicLocationToVariantFormat.convert(gl),
-                    gl.getOriginalInput());
-        });
-
+        Map<String, String> convertedVarsToOrigVarQueryMap = mapConvertedVarsToOrigVarQuery(genomicLocations);
         List<VariantAnnotation> variantAnnotations = new ArrayList<>();
         this.variantAnnotationService.getAnnotations(
                 this.genomicLocationsToVariantFormats.convert(genomicLocations),
@@ -147,6 +158,16 @@ public class GenomicLocationAnnotationServiceImpl implements GenomicLocationAnno
         return variantAnnotations;
     }
 
+    private Map<String, String> mapConvertedVarsToOrigVarQuery(List<GenomicLocation> genomicLocations) {
+        Map<String, String> convertedVarsToOrigVarQueryMap = new HashMap<>();
+        genomicLocations.forEach((gl) -> {
+            gl.setOriginalInput(gl.toString());
+            convertedVarsToOrigVarQueryMap.put(this.genomicLocationToVariantFormat.convert(gl),
+                    gl.getOriginalInput());
+        });
+        return convertedVarsToOrigVarQueryMap;
+    }
+
     @FunctionalInterface
     private static interface GenomicLocationToVariantFormat {
         String convert(GenomicLocation genomicLocation);
@@ -159,6 +180,6 @@ public class GenomicLocationAnnotationServiceImpl implements GenomicLocationAnno
 
     @FunctionalInterface
     private static interface GenomicLocationsToVariantFormats {
-        List<String> convert(List<GenomicLocation> genomcLocation);
+        List<String> convert(List<GenomicLocation> genomicLocation);
     }
 }
