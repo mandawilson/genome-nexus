@@ -40,6 +40,8 @@ import static org.junit.Assert.fail;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import org.cbioportal.genome_nexus.component.annotation.NotationConverter;
+import org.cbioportal.genome_nexus.model.GenomicLocation;
 import org.cbioportal.genome_nexus.model.VariantAnnotation;
 import org.cbioportal.genome_nexus.service.GenomicLocationAnnotationService;
 import org.cbioportal.genome_nexus.service.exception.VariantAnnotationNotFoundException;
@@ -57,6 +59,9 @@ public class VerifiedGenomicLocationAnnotationServiceTest
 {
     @InjectMocks
     private VerifiedGenomicLocationAnnotationServiceImpl verifiedGenomicLocationAnnotationServiceImpl;
+
+    @Spy
+    private NotationConverter notationConverter;
 
     @Mock
     private GenomicLocationAnnotationService glVariantAnnotationService;
@@ -119,7 +124,7 @@ public class VerifiedGenomicLocationAnnotationServiceTest
             glInsertionDeletions.add(new VariantTestCase("5,138163256,138163256,A,TT", true, "C/TT", false, null, "1nt deletion with discrepant RefAllele, 2nt insertion"));
             glInsertionDeletions.add(new VariantTestCase("5,138163255,138163256,TC,A", true, "TC/A", true, "TC/A", "2nt deletion with RefAllele, 1nt insertion"));
             glInsertionDeletions.add(new VariantTestCase("5,138163255,138163256,TA,G", true, "TC/G", false, null, "2nt deletion with discrepant RefAllele, 1nt insertion"));
-            glInsertionDeletions.add(new VariantTestCase("5,138163255,138163256,TC,TC", true, "TC/TC", true, null, "2nt deletion with RefAllele, 2nt insertion no change")); // note : different result than ensembl
+            glInsertionDeletions.add(new VariantTestCase("5,138163255,138163256,TC,TC", true, "TC/TC", true, "TC/TC", "2nt deletion with RefAllele, 2nt insertion no change")); // note : different result than ensembl
             glInsertionDeletions.add(new VariantTestCase("5,138163255,138163256,TC,TT", true, "C/T", true, "C/T", "2nt deletion with RefAllele, 2nt insertion, partial change"));
             glInsertionDeletions.add(new VariantTestCase("5,138163255,138163256,TC,GG", true, "TC/GG", true, "TC/GG", "2nt deletion with RefAllele, 2nt insertion, full change"));
             glInsertionDeletions.add(new VariantTestCase("5,138163255,138163256,CC,TC", true, "TC/TC", false, null, "2nt deletion with discrepant RefAllele, 2nt insertion no change")); // note : different result than ensembl
@@ -129,7 +134,6 @@ public class VerifiedGenomicLocationAnnotationServiceTest
         }
     }
 
-/*
     private void runTestSetByVariantString(List<VariantTestCase> variantTestCaseList, boolean supplyOtherParameters)
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
@@ -151,36 +155,36 @@ public class VerifiedGenomicLocationAnnotationServiceTest
             }
         }
     }
-*/
-    private void runTestSetByVariantString(List<VariantTestCase> variantTestCaseList)
+
+    private void runTestSetByGenomicLocation(List<VariantTestCase> variantTestCaseList)
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
         for (VariantTestCase testCase : variantTestCaseList) {
+            GenomicLocation genomicLocation = notationConverter.parseGenomicLocation(testCase.originalVariantQuery);
             VariantAnnotation testResponse = null;
             testResponse = verifiedGenomicLocationAnnotationServiceImpl.getAnnotation(testCase.originalVariantQuery);
-            assertEquals(testCase.originalVariantQuery + " : response query field does not match request query string", testCase.originalVariantQuery, testResponse.getOriginalVariantQuery());
+            assertEquals(genomicLocation.toString() + " : response query field does not match request query string", genomicLocation.toString(), testResponse.getOriginalVariantQuery());
             if (testCase.expectedGnSuccessfullyAnnotated) {
-                assertTrue(testCase.originalVariantQuery + " : expected successful annotation", testResponse.isSuccessfullyAnnotated());
+                assertTrue(genomicLocation.toString() + " : expected successful annotation", testResponse.isSuccessfullyAnnotated());
             } else {
-                assertFalse(testCase.originalVariantQuery + " : expected failed annotation", testResponse.isSuccessfullyAnnotated());
+                assertFalse(genomicLocation.toString() + " : expected failed annotation", testResponse.isSuccessfullyAnnotated());
             }
             if (testResponse.isSuccessfullyAnnotated()) {
-                assertEquals(testCase.originalVariantQuery + " : Variant Allele comparison", testCase.expectedGnAlleleString, testResponse.getAlleleString());
+                assertEquals(genomicLocation.toString() + " : Variant Allele comparison", testCase.expectedGnAlleleString, testResponse.getAlleleString());
             }
         }
     }
 
-/*
-    private void runTestSetByVariantList(List<VariantTestCase> variantTestCaseList, boolean supplyOtherParameters)
+    private void runTestSetByGenomicLocationList(List<VariantTestCase> variantTestCaseList, boolean supplyOtherParameters)
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
         // make list of variant query strings and submit
-        List<String> originalVariantQueries = variantTestCaseList.stream().map(t -> t.originalVariantQuery).collect(Collectors.toList());
+        List<GenomicLocation> queryGenomicLocations = variantTestCaseList.stream().map(t -> notationConverter.parseGenomicLocation(t.originalVariantQuery)).collect(Collectors.toList());
         List<VariantAnnotation> variantResponse = null;
         if (supplyOtherParameters) {
-            variantResponse = verifiedGenomicLocationAnnotationServiceImpl.getAnnotations(originalVariantQueries, mockIsoformOverrideSource, mockTokenMap, mockFields);
+            variantResponse = verifiedGenomicLocationAnnotationServiceImpl.getAnnotations(queryGenomicLocations, mockIsoformOverrideSource, mockTokenMap, mockFields);
         } else {
-            variantResponse = verifiedGenomicLocationAnnotationServiceImpl.getAnnotations(originalVariantQueries);
+            variantResponse = verifiedGenomicLocationAnnotationServiceImpl.getAnnotations(queryGenomicLocations);
         }
         // check each element of response against expectations
         HashMap<String, VariantAnnotation> queryToResponse = new HashMap<String, VariantAnnotation>();
@@ -204,7 +208,7 @@ public class VerifiedGenomicLocationAnnotationServiceTest
             }
         }
     }
-*/
+
     // Tests of the getAnnotation(String) function
 
     @Test
@@ -213,7 +217,7 @@ public class VerifiedGenomicLocationAnnotationServiceTest
     {
         initializeTestCasesIfNeeded();
         mockGenomicLocationAnnotationServiceMethods();
-        runTestSetByVariantString(glSubstitutions);
+        runTestSetByVariantString(glSubstitutions, false);
     }
 
     @Test
@@ -222,7 +226,7 @@ public class VerifiedGenomicLocationAnnotationServiceTest
     {
         initializeTestCasesIfNeeded();
         mockGenomicLocationAnnotationServiceMethods();
-        runTestSetByVariantString(glDeletions);
+        runTestSetByVariantString(glDeletions, false);
     }
 
     @Test
@@ -231,7 +235,7 @@ public class VerifiedGenomicLocationAnnotationServiceTest
     {
         initializeTestCasesIfNeeded();
         mockGenomicLocationAnnotationServiceMethods();
-        runTestSetByVariantString(glInsertions);
+        runTestSetByVariantString(glInsertions, false);
     }
 
     @Test
@@ -240,9 +244,9 @@ public class VerifiedGenomicLocationAnnotationServiceTest
     {
         initializeTestCasesIfNeeded();
         mockGenomicLocationAnnotationServiceMethods();
-        runTestSetByVariantString(glInsertionDeletions);
+        runTestSetByVariantString(glInsertionDeletions, false);
     }
-/*
+
     // Tests of the getAnnotation(String, overrideSource, tokenMap, fields) function
 
     @Test
@@ -281,105 +285,153 @@ public class VerifiedGenomicLocationAnnotationServiceTest
         runTestSetByVariantString(glInsertionDeletions, true);
     }
 
-    // Tests of the getAnnotations(List<String>) function
+    // Tests of the getAnnotation(GenomicLocation) function
 
     @Test
-    public void getAnnotationsForSubstitutionsByVariantList()
+    public void getAnnotationForSubstitutionsByGenomicLocation()
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
         initializeTestCasesIfNeeded();
         mockGenomicLocationAnnotationServiceMethods();
-        runTestSetByVariantList(glSubstitutions, false);
+        runTestSetByGenomicLocation(glSubstitutions);
     }
 
     @Test
-    public void getAnnotationsForDeletionsByVariantList()
+    public void getAnnotationForDeletionsByGenomicLocation()
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
         initializeTestCasesIfNeeded();
         mockGenomicLocationAnnotationServiceMethods();
-        runTestSetByVariantList(glDeletions, false);
+        runTestSetByGenomicLocation(glDeletions);
     }
 
     @Test
-    public void getAnnotationsForInsertionsByVariantList()
+    public void getAnnotationForInsertionsByGenomicLocation()
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
         initializeTestCasesIfNeeded();
         mockGenomicLocationAnnotationServiceMethods();
-        runTestSetByVariantList(glInsertions, false);
+        runTestSetByGenomicLocation(glInsertions);
     }
 
     @Test
-    public void getAnnotationsForInsertionDeletionsByVariantList()
+    public void getAnnotationForInsertionDeletionsByGenomicLocation()
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
         initializeTestCasesIfNeeded();
         mockGenomicLocationAnnotationServiceMethods();
-        runTestSetByVariantList(glInsertionDeletions, false);
+        runTestSetByGenomicLocation(glInsertionDeletions);
     }
 
-    // Tests of the getAnnotations(List<String>, overrideSource, tokenMap, fields) function
+    // Tests of the getAnnotations(List<GenomicLocation>) function
+
+/*
 
     @Test
-    public void getAnnotationsForSubstitutionsByVariantListWithArgs()
+    public void getAnnotationsForSubstitutionsByGenomicLocationList()
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
         initializeTestCasesIfNeeded();
         mockGenomicLocationAnnotationServiceMethods();
-        runTestSetByVariantList(glSubstitutions, true);
+        runTestSetByGenomicLocationList(glSubstitutions, false);
     }
 
     @Test
-    public void getAnnotationsForDeletionsByVariantListWithArgs()
+    public void getAnnotationsForDeletionsByGenomicLocationList()
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
         initializeTestCasesIfNeeded();
         mockGenomicLocationAnnotationServiceMethods();
-        runTestSetByVariantList(glDeletions, true);
+        runTestSetByGenomicLocationList(glDeletions, false);
     }
 
     @Test
-    public void getAnnotationsForInsertionsByVariantListWithArgs()
+    public void getAnnotationsForInsertionsByGenomicLocationList()
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
         initializeTestCasesIfNeeded();
         mockGenomicLocationAnnotationServiceMethods();
-        runTestSetByVariantList(glInsertions, true);
+        runTestSetByGenomicLocationList(glInsertions, false);
     }
 
     @Test
-    public void getAnnotationsForInsertionDeletionsByVariantListWithArgs()
+    public void getAnnotationsForInsertionDeletionsByGenomicLocationList()
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
         initializeTestCasesIfNeeded();
         mockGenomicLocationAnnotationServiceMethods();
-        runTestSetByVariantList(glInsertionDeletions, true);
+        runTestSetByGenomicLocationList(glInsertionDeletions, false);
     }
+
 */
+
+    // Tests of the getAnnotations(List<GenomicLocation>, overrideSource, tokenMap, fields) function
+
+/*
+
+    @Test
+    public void getAnnotationsForSubstitutionsByGenomicLocationListWithArgs()
+        throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
+    {
+        initializeTestCasesIfNeeded();
+        mockGenomicLocationAnnotationServiceMethods();
+        runTestSetByGenomicLocationList(glSubstitutions, true);
+    }
+
+    @Test
+    public void getAnnotationsForDeletionsByGenomicLocationListWithArgs()
+        throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
+    {
+        initializeTestCasesIfNeeded();
+        mockGenomicLocationAnnotationServiceMethods();
+        runTestSetByGenomicLocationList(glDeletions, true);
+    }
+
+    @Test
+    public void getAnnotationsForInsertionsByGenomicLocationListWithArgs()
+        throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
+    {
+        initializeTestCasesIfNeeded();
+        mockGenomicLocationAnnotationServiceMethods();
+        runTestSetByGenomicLocationList(glInsertions, true);
+    }
+
+    @Test
+    public void getAnnotationsForInsertionDeletionsByGenomicLocationListWithArgs()
+        throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
+    {
+        initializeTestCasesIfNeeded();
+        mockGenomicLocationAnnotationServiceMethods();
+        runTestSetByGenomicLocationList(glInsertionDeletions, true);
+    }
+
+*/
+
     private void mockGenomicLocationAnnotationServiceMethodsForType(List<VariantTestCase> variantTestCaseList)
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
-        ArrayList<String> queryList = new ArrayList<String>();
+        ArrayList<String> queryStringList = new ArrayList<String>();
+        ArrayList<GenomicLocation> queryGenomicLocationList = new ArrayList<GenomicLocation>();
         ArrayList<VariantAnnotation> responseList = new ArrayList<VariantAnnotation>();
         for (VariantTestCase testCase : variantTestCaseList) {
+            GenomicLocation genomicLocation = notationConverter.parseGenomicLocation(testCase.originalVariantQuery);
+            queryStringList.add(testCase.originalVariantQuery);
+            queryGenomicLocationList.add(genomicLocation);
             VariantAnnotation response = createAnnotation(
                     testCase.originalVariantQuery,
                     testCase.originalVariantQuery,
                     testCase.vepSuccessfullyAnnotated,
                     testCase.vepAlleleString);
             responseList.add(response);
-            queryList.add(testCase.originalVariantQuery);
             Mockito.when(glVariantAnnotationService.getAnnotation(testCase.originalVariantQuery)).thenReturn(response);
             Mockito.when(glVariantAnnotationService.getAnnotation(testCase.originalVariantQuery, mockIsoformOverrideSource, mockTokenMap, mockFields)).thenReturn(response);
+            Mockito.when(glVariantAnnotationService.getAnnotation(genomicLocation)).thenReturn(response);
         }
         // order of response not guaranteed to match order of query - business logic should handle properly
         VariantAnnotation movedItem = responseList.remove(0);
         responseList.add(movedItem); // first element is now last
-/*
-        Mockito.when(glVariantAnnotationService.getAnnotations(queryList)).thenReturn(responseList);
-        Mockito.when(glVariantAnnotationService.getAnnotations(queryList, mockIsoformOverrideSource, mockTokenMap, mockFields)).thenReturn(responseList);
-*/
+        Mockito.when(glVariantAnnotationService.getAnnotations(queryGenomicLocationList)).thenReturn(responseList);
+        Mockito.when(glVariantAnnotationService.getAnnotations(queryGenomicLocationList, mockIsoformOverrideSource, mockTokenMap, mockFields)).thenReturn(responseList);
     }
 
     private void mockGenomicLocationAnnotationServiceMethods()

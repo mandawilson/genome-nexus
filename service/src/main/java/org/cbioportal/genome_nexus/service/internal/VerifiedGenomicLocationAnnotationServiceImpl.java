@@ -53,14 +53,15 @@ public class VerifiedGenomicLocationAnnotationServiceImpl implements GenomicLoca
     private static final Log LOG = LogFactory.getLog(VerifiedGenomicLocationAnnotationServiceImpl.class);
 
     private final GenomicLocationAnnotationService genomicLocationAnnotationService;
+    private final NotationConverter notationConverter;
 
     @Autowired
-    private NotationConverter notationConverter;
-
-    @Autowired
-    public VerifiedGenomicLocationAnnotationServiceImpl(GenomicLocationAnnotationService genomicLocationAnnotationService)
+    public VerifiedGenomicLocationAnnotationServiceImpl(
+            GenomicLocationAnnotationService genomicLocationAnnotationService,
+            NotationConverter notationConverter)
     {
         this.genomicLocationAnnotationService = genomicLocationAnnotationService;
+        this.notationConverter = notationConverter;
     }
 
     @Override
