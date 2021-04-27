@@ -63,4 +63,35 @@ public class GenomicLocation
     public String toString() {
         return this.getChromosome() + "," + this.getStart() + "," + this.getEnd() + "," + this.getReferenceAllele() + "," + this.getVariantAllele();
     }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (!(obj instanceof GenomicLocation)) {
+            return false;
+        }
+        GenomicLocation gl = (GenomicLocation)obj;
+        return this.start.equals(gl.start) &&
+                this.end.equals(gl.end) &&
+                this.chromosome.equals(gl.chromosome) &&
+                this.referenceAllele.equals(gl.referenceAllele) &&
+                this.variantAllele.equals(gl.variantAllele);
+    }
+
+    @Override
+    public int hashCode() {
+        if (this == null) {
+            return 0;
+        }
+        int hash = 7;
+        hash =  31 * hash + (start == null ? 0 : start.hashCode());
+        hash =  31 * hash + (end == null ? 0 : end.hashCode());
+        hash =  31 * hash + (chromosome == null ? 0 : chromosome.hashCode());
+        hash =  31 * hash + (referenceAllele == null ? 0 : referenceAllele.hashCode());
+        hash =  31 * hash + (variantAllele == null ? 0 : variantAllele.hashCode());
+        return hash;
+    }
+
 }
