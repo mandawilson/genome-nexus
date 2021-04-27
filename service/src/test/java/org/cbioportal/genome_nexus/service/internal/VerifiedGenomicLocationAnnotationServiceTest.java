@@ -32,20 +32,15 @@
 
 package org.cbioportal.genome_nexus.service.internal;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.fail;
-
 import java.util.*;
 import java.util.stream.Collectors;
-
 import org.cbioportal.genome_nexus.component.annotation.NotationConverter;
 import org.cbioportal.genome_nexus.model.GenomicLocation;
 import org.cbioportal.genome_nexus.model.VariantAnnotation;
 import org.cbioportal.genome_nexus.service.GenomicLocationAnnotationService;
 import org.cbioportal.genome_nexus.service.exception.VariantAnnotationNotFoundException;
 import org.cbioportal.genome_nexus.service.exception.VariantAnnotationWebServiceException;
+import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.InjectMocks;
@@ -144,14 +139,14 @@ public class VerifiedGenomicLocationAnnotationServiceTest
             } else {
                 testResponse = verifiedGenomicLocationAnnotationServiceImpl.getAnnotation(testCase.originalVariantQuery);
             }
-            assertEquals(testCase.originalVariantQuery + " : response query field does not match request query string", testCase.originalVariantQuery, testResponse.getOriginalVariantQuery());
+            Assert.assertEquals(testCase.originalVariantQuery + " : response query field does not match request query string", testCase.originalVariantQuery, testResponse.getOriginalVariantQuery());
             if (testCase.expectedGnSuccessfullyAnnotated) {
-                assertTrue(testCase.originalVariantQuery + " : expected successful annotation", testResponse.isSuccessfullyAnnotated());
+                Assert.assertTrue(testCase.originalVariantQuery + " : expected successful annotation", testResponse.isSuccessfullyAnnotated());
             } else {
-                assertFalse(testCase.originalVariantQuery + " : expected failed annotation", testResponse.isSuccessfullyAnnotated());
+                Assert.assertFalse(testCase.originalVariantQuery + " : expected failed annotation", testResponse.isSuccessfullyAnnotated());
             }
             if (testResponse.isSuccessfullyAnnotated()) {
-                assertEquals(testCase.originalVariantQuery + " : Variant Allele comparison", testCase.expectedGnAlleleString, testResponse.getAlleleString());
+                Assert.assertEquals(testCase.originalVariantQuery + " : Variant Allele comparison", testCase.expectedGnAlleleString, testResponse.getAlleleString());
             }
         }
     }
@@ -163,14 +158,14 @@ public class VerifiedGenomicLocationAnnotationServiceTest
             GenomicLocation genomicLocation = notationConverter.parseGenomicLocation(testCase.originalVariantQuery);
             VariantAnnotation testResponse = null;
             testResponse = verifiedGenomicLocationAnnotationServiceImpl.getAnnotation(testCase.originalVariantQuery);
-            assertEquals(genomicLocation.toString() + " : response query field does not match request query string", genomicLocation.toString(), testResponse.getOriginalVariantQuery());
+            Assert.assertEquals(genomicLocation.toString() + " : response query field does not match request query string", genomicLocation.toString(), testResponse.getOriginalVariantQuery());
             if (testCase.expectedGnSuccessfullyAnnotated) {
-                assertTrue(genomicLocation.toString() + " : expected successful annotation", testResponse.isSuccessfullyAnnotated());
+                Assert.assertTrue(genomicLocation.toString() + " : expected successful annotation", testResponse.isSuccessfullyAnnotated());
             } else {
-                assertFalse(genomicLocation.toString() + " : expected failed annotation", testResponse.isSuccessfullyAnnotated());
+                Assert.assertFalse(genomicLocation.toString() + " : expected failed annotation", testResponse.isSuccessfullyAnnotated());
             }
             if (testResponse.isSuccessfullyAnnotated()) {
-                assertEquals(genomicLocation.toString() + " : Variant Allele comparison", testCase.expectedGnAlleleString, testResponse.getAlleleString());
+                Assert.assertEquals(genomicLocation.toString() + " : Variant Allele comparison", testCase.expectedGnAlleleString, testResponse.getAlleleString());
             }
         }
     }
@@ -190,21 +185,21 @@ public class VerifiedGenomicLocationAnnotationServiceTest
         HashMap<String, VariantAnnotation> queryToResponse = new HashMap<String, VariantAnnotation>();
         for (VariantAnnotation responseElement : variantResponse) {
             if (queryToResponse.put(responseElement.getOriginalVariantQuery(), responseElement) != null) {
-                fail("More than one response received for query string " + responseElement.getOriginalVariantQuery());
+                Assert.fail("More than one response received for query string " + responseElement.getOriginalVariantQuery());
             }
         }
         for (VariantTestCase testCase : variantTestCaseList) {
             VariantAnnotation testResponse = queryToResponse.get(testCase.originalVariantQuery);
             if (testResponse == null) {
-                fail("Response did not include record for query string " + testCase.originalVariantQuery);
+                Assert.fail("Response did not include record for query string " + testCase.originalVariantQuery);
             }
             if (testCase.expectedGnSuccessfullyAnnotated) {
-                assertTrue(testCase.originalVariantQuery + " : expected successful annotation", testResponse.isSuccessfullyAnnotated());
+                Assert.assertTrue(testCase.originalVariantQuery + " : expected successful annotation", testResponse.isSuccessfullyAnnotated());
             } else {
-                assertFalse(testCase.originalVariantQuery + " : expected failed annotation", testResponse.isSuccessfullyAnnotated());
+                Assert.assertFalse(testCase.originalVariantQuery + " : expected failed annotation", testResponse.isSuccessfullyAnnotated());
             }
             if (testResponse.isSuccessfullyAnnotated()) {
-                assertEquals(testCase.originalVariantQuery + " : Variant Allele comparison", testCase.expectedGnAlleleString, testResponse.getAlleleString());
+                Assert.assertEquals(testCase.originalVariantQuery + " : Variant Allele comparison", testCase.expectedGnAlleleString, testResponse.getAlleleString());
             }
         }
     }
