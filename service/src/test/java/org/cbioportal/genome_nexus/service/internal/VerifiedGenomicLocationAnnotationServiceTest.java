@@ -44,10 +44,8 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.Spy;
 import org.mockito.junit.MockitoJUnitRunner;
 
 @RunWith(MockitoJUnitRunner.Silent.class)
@@ -109,7 +107,7 @@ public class VerifiedGenomicLocationAnnotationServiceTest
         setUpServiceStubs(); // these are based on the test case lists
     }
 
-    void initializeTestCaseLists()
+    private void initializeTestCaseLists()
     {
         if (glSubstitutions == null) {
             glSubstitutions = new ArrayList<VariantTestCase>();
@@ -213,7 +211,7 @@ public class VerifiedGenomicLocationAnnotationServiceTest
                     successfullyAnnotatedStub,
                     alleleStringStub);
             responseList.add(response);
-            //response.setAnnotationJSON("{ \"originalVariantQuery\" : \"" + testCase.originalVariantQuery + "\", \"successfullyAnnotated\" : " + testCase.vepSuccessfullyAnnotated + ", \"allele\" : \"" + testCase.vepAlleleString + "\" }");
+            //response.setAnnotationJSON("{ \"originalVariantQuery\" : \"" + testCase.originalVariantQuery + "\", \"successfullyAnnotated\" : " + successfullyAnnotatedStub + ", \"allele\" : \"" + alleleStringStub + "\" }");
             Mockito.when(glVariantAnnotationService.getAnnotation(testCase.originalVariantQuery)).thenReturn(response);
             Mockito.when(glVariantAnnotationService.getAnnotation(testCase.originalVariantQuery, mockIsoformOverrideSource, mockTokenMap, mockFields)).thenReturn(response);
             Mockito.when(glVariantAnnotationService.getAnnotation(genomicLocation)).thenReturn(response);

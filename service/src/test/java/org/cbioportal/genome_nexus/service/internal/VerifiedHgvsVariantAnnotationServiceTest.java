@@ -32,54 +32,27 @@
 
 package org.cbioportal.genome_nexus.service.internal;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
-
 import java.util.*;
-
+import java.util.stream.Collectors;
 import org.cbioportal.genome_nexus.model.VariantAnnotation;
 import org.cbioportal.genome_nexus.service.exception.VariantAnnotationNotFoundException;
 import org.cbioportal.genome_nexus.service.exception.VariantAnnotationWebServiceException;
+import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.Spy;
 import org.mockito.junit.MockitoJUnitRunner;
 
 @RunWith(MockitoJUnitRunner.Silent.class)
 public class VerifiedHgvsVariantAnnotationServiceTest
 {
-    @InjectMocks
-    private VerifiedHgvsVariantAnnotationService variantAnnotationService;
+    // Tested Class
+    private VerifiedHgvsVariantAnnotationService verifiedHgvsVariantAnnotationService;
 
     @Mock
     private HgvsVariantAnnotationService hgvsVariantAnnotationService;
-
-    class VariantTestCase {
-        public String originalVariantQuery;
-        public boolean vepSuccessfullyAnnotated;
-        public String vepAlleleString;
-        public boolean expectedGnSuccessfullyAnnotated;
-        public String expectedGnAlleleString;
-        public String description;
-        public VariantTestCase(
-                String originalVariantQuery,
-                boolean vepSuccessfullyAnnotated,
-                String vepAlleleString,
-                boolean expectedGnSuccessfullyAnnotated,
-                String expectedGnAlleleString,
-                String description) {
-            this.originalVariantQuery =  originalVariantQuery;
-            this.vepSuccessfullyAnnotated = vepSuccessfullyAnnotated;
-            this.vepAlleleString = vepAlleleString;
-            this.expectedGnSuccessfullyAnnotated = expectedGnSuccessfullyAnnotated;
-            this.expectedGnAlleleString = expectedGnAlleleString;
-            this.description = description;
-        }
-    }
 
     // test cases
     public List<VariantTestCase> hgvsSubstitutions = null;
@@ -88,55 +61,197 @@ public class VerifiedHgvsVariantAnnotationServiceTest
     public List<VariantTestCase> hgvsInsertionDeletions = null;
     public List<VariantTestCase> hgvsInversions = null; // test results of an unsupported format query
     // other types (duplications, no-change, methylation, specified alleles) are not handled by genome nexus and are not tested
-
+    // single query stub maps
+    public Map<String, Boolean> variantToVepSuccessfullyAnnotated = new HashMap<String, Boolean>();
+    public Map<String, String> variantToVepAlleleString = new HashMap<String, String>();
+    // argument list stubs
     public String mockIsoformOverrideSource = "mockIsoformOverrideSource";
     public Map<String, String> mockTokenMap = new HashMap<String, String>();
     public List<String> mockFields = new ArrayList<String>();
 
-    public void initializeTestCasesIfNeeded() {
-        // VEP responses for these test cases are extraced from queries to http://grch37.rest.ensembl.org/vep/human/hgvs/<variant>
+    class VariantTestCase {
+        public String originalVariantQuery;
+        public boolean expectedGnSuccessfullyAnnotated;
+        public String expectedGnAlleleString;
+        public String description;
+        public VariantTestCase(
+                String originalVariantQuery,
+                boolean expectedGnSuccessfullyAnnotated,
+                String expectedGnAlleleString,
+                String description) {
+            this.originalVariantQuery =  originalVariantQuery;
+            this.expectedGnSuccessfullyAnnotated = expectedGnSuccessfullyAnnotated;
+            this.expectedGnAlleleString = expectedGnAlleleString;
+            this.description = description;
+        }
+    }
+
+    class TestCaseInsufficentlyModeledException extends Exception
+    {
+        public TestCaseInsufficentlyModeledException(String msg) {
+            super(msg);
+        }
+    }
+
+    @Before
+    public void setUp()
+        throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException, TestCaseInsufficentlyModeledException
+    {
+        verifiedHgvsVariantAnnotationService = new VerifiedHgvsVariantAnnotationService(hgvsVariantAnnotationService);
+        initializeTestCaseLists();
+        setUpServiceStubs(); // these are based on the test case lists
+    }
+
+    private void initializeTestCaseLists()
+    {
         if (hgvsSubstitutions == null) {
             hgvsSubstitutions = new ArrayList<VariantTestCase>();
-            hgvsSubstitutions.add(new VariantTestCase("5:g.138163256C>T", true, "C/T", true, "C/T", "valid substitution"));
-            hgvsSubstitutions.add(new VariantTestCase("5:g.138163256A>T", false, null, false, null, "discrepant RefAllele"));
-            hgvsSubstitutions.add(new VariantTestCase("5:g.138163256>T", false, null, false, null, "missing RefAllele"));
+            hgvsSubstitutions.add(new VariantTestCase("5:g.138163256C>T", true, "C/T", "valid substitution"));
+            hgvsSubstitutions.add(new VariantTestCase("5:g.138163256A>T", false, null, "discrepant RefAllele"));
+            hgvsSubstitutions.add(new VariantTestCase("5:g.138163256>T", false, null, "missing RefAllele"));
             hgvsDeletions = new ArrayList<VariantTestCase>();
-            hgvsDeletions.add(new VariantTestCase("5:g.138163256delC", true, "C/-", true, "C/-", "1nt deletion with RefAllele"));
-            hgvsDeletions.add(new VariantTestCase("5:g.138163256delA", true, "C/-", false, null, "1nt deletion with discrepant RefAllele"));
-            hgvsDeletions.add(new VariantTestCase("5:g.138163256del", true, "C/-", true, "C/-", "1nt deletion missing RefAllele"));
-            hgvsDeletions.add(new VariantTestCase("5:g.138163255_138163256delTC", true, "TC/-", true, "TC/-", "2nt deletion with RefAllele"));
-            hgvsDeletions.add(new VariantTestCase("5:g.138163255_138163256delCC", true, "TC/-", false, null, "2nt deletion with discrepant RefAllele"));
-            hgvsDeletions.add(new VariantTestCase("5:g.138163255_138163256delCCCC", true, "TC/-", false, null, "2nt deletion with invalid RefAllele"));
-            hgvsDeletions.add(new VariantTestCase("5:g.138163255_138163256del", true, "TC/-", true, "TC/-", "2nt deletion missing RefAllele"));
+            hgvsDeletions.add(new VariantTestCase("5:g.138163256delC", true, "C/-", "1nt deletion with RefAllele"));
+            hgvsDeletions.add(new VariantTestCase("5:g.138163256delA", false, null, "1nt deletion with discrepant RefAllele"));
+            hgvsDeletions.add(new VariantTestCase("5:g.138163256del", true, "C/-", "1nt deletion missing RefAllele"));
+            hgvsDeletions.add(new VariantTestCase("5:g.138163255_138163256delTC", true, "TC/-", "2nt deletion with RefAllele"));
+            hgvsDeletions.add(new VariantTestCase("5:g.138163255_138163256delCC", false, null, "2nt deletion with discrepant RefAllele"));
+            hgvsDeletions.add(new VariantTestCase("5:g.138163255_138163256delCCCC", false, null, "2nt deletion with invalid RefAllele"));
+            hgvsDeletions.add(new VariantTestCase("5:g.138163255_138163256del", true, "TC/-", "2nt deletion missing RefAllele"));
             hgvsInsertions = new ArrayList<VariantTestCase>();
-            hgvsInsertions.add(new VariantTestCase("5:g.138163255_138163256insT", true, "-/T", true, "-/T", "1nt insertion"));
-            hgvsInsertions.add(new VariantTestCase("5:g.138163255_138163256insTT", true, "-/TT", true, "-/TT", "2nt insertion"));
-            hgvsInsertions.add(new VariantTestCase("5:g.138163255_138163256ins", false, null, false, null, "insertion missing TumorSeqAllele"));
+            hgvsInsertions.add(new VariantTestCase("5:g.138163255_138163256insT", true, "-/T", "1nt insertion"));
+            hgvsInsertions.add(new VariantTestCase("5:g.138163255_138163256insTT", true, "-/TT", "2nt insertion"));
+            hgvsInsertions.add(new VariantTestCase("5:g.138163255_138163256ins", false, null, "insertion missing TumorSeqAllele"));
             hgvsInsertionDeletions = new ArrayList<VariantTestCase>();
-            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163256delinsT", true, "C/T", true, "C/T", "1nt deletion without RefAllele, 1nt insertion"));
-            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163256delCinsT", true, "C/T", true, "C/T", "1nt deletion with RefAllele, 1nt insertion"));
-            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163256delAinsT", true, "C/T", false, null, "1nt deletion with discrepant RefAllele, 1nt insertion"));
-            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163256delinsC", false, null, false, null, "1nt deletion without RefAllele, 1nt insertion no change"));
-            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163256delinsTT", true, "C/TT", true, "C/TT", "1nt deletion without RefAllele, 2nt insertion"));
-            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163256delCinsTT", true, "C/TT", true, "C/TT", "1nt deletion with RefAllele, 2nt insertion"));
-            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163256delAinsTT", true, "C/TT", false, null, "1nt deletion with discrepant RefAllele, 2nt insertion"));
-            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delinsG", true, "TC/G", true, "TC/G", "2nt deletion without RefAllele, 1nt insertion"));
-            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delTCinsA", true, "TC/A", true, "TC/A", "2nt deletion with RefAllele, 1nt insertion"));
-            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delTAinsG", true, "TC/G", false, null, "2nt deletion with discrepant RefAllele, 1nt insertion"));
-            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delTCinsTC", false, null, false, null, "2nt deletion with RefAllele, 2nt insertion no change"));
-            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delTCinsTT", true, "C/T", true, "C/T", "2nt deletion with RefAllele, 2nt insertion, partial change"));
-            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delTCinsGG", true, "TC/GG", true, "TC/GG", "2nt deletion with RefAllele, 2nt insertion, full change"));
-            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delCCinsTC", false, null, false, null, "2nt deletion with discrepant RefAllele, 2nt insertion no change"));
-            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delCCinsTT", true, "C/T", false, null, "2nt deletion with discrepant RefAllele, 2nt insertion, partial change"));
-            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delCCinsGG", true, "TC/GG", false, null, "2nt deletion with discrepant RefAllele, 2nt insertion, full change"));
-            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delinsTC", false, null, false, null, "2nt deletion without RefAllele, 2nt insertion no change"));
-            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delinsTT", true, "C/T", true, "C/T", "2nt deletion without RefAllele, 2nt insertion, partial change"));
-            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delinsGG", true, "TC/GG", true, "TC/GG", "2nt deletion without RefAllele, 2nt insertion, full change"));
-            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delCCCCinsTT", true, "C/T", false, null, "2nt deletion with invalid RefAllele, 2nt insertion"));
+            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163256delinsT", true, "C/T", "1nt deletion without RefAllele, 1nt insertion"));
+            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163256delCinsT", true, "C/T", "1nt deletion with RefAllele, 1nt insertion"));
+            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163256delAinsT", false, null, "1nt deletion with discrepant RefAllele, 1nt insertion"));
+            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163256delinsC", false, null, "1nt deletion without RefAllele, 1nt insertion no change"));
+            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163256delinsTT", true, "C/TT", "1nt deletion without RefAllele, 2nt insertion"));
+            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163256delCinsTT", true, "C/TT", "1nt deletion with RefAllele, 2nt insertion"));
+            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163256delAinsTT", false, null, "1nt deletion with discrepant RefAllele, 2nt insertion"));
+            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delinsG", true, "TC/G", "2nt deletion without RefAllele, 1nt insertion"));
+            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delTCinsA", true, "TC/A", "2nt deletion with RefAllele, 1nt insertion"));
+            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delTAinsG", false, null, "2nt deletion with discrepant RefAllele, 1nt insertion"));
+            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delTCinsTC", false, null, "2nt deletion with RefAllele, 2nt insertion no change"));
+            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delTCinsTT", true, "C/T", "2nt deletion with RefAllele, 2nt insertion, partial change"));
+            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delTCinsGG", true, "TC/GG", "2nt deletion with RefAllele, 2nt insertion, full change"));
+            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delCCinsTC", false, null, "2nt deletion with discrepant RefAllele, 2nt insertion no change"));
+            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delCCinsTT", false, null, "2nt deletion with discrepant RefAllele, 2nt insertion, partial change"));
+            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delCCinsGG", false, null, "2nt deletion with discrepant RefAllele, 2nt insertion, full change"));
+            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delinsTC", false, null, "2nt deletion without RefAllele, 2nt insertion no change"));
+            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delinsTT", true, "C/T", "2nt deletion without RefAllele, 2nt insertion, partial change"));
+            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delinsGG", true, "TC/GG", "2nt deletion without RefAllele, 2nt insertion, full change"));
+            hgvsInsertionDeletions.add(new VariantTestCase("5:g.138163255_138163256delCCCCinsTT", false, null, "2nt deletion with invalid RefAllele, 2nt insertion"));
             hgvsInversions = new ArrayList<VariantTestCase>();
-            hgvsInversions.add(new VariantTestCase("5:g.138163255_138163256inv", true, "TC/GA", true, "TC/GA", "inversions not supported - but will run as passthrough"));
-            hgvsInversions.add(new VariantTestCase("5:g.138163255_138163256invTC", false, null, false, null, "inversion format does not allow specification of RefAllele"));
+            hgvsInversions.add(new VariantTestCase("5:g.138163255_138163256inv", true, "TC/GA", "inversions not supported - but will run as passthrough"));
+            hgvsInversions.add(new VariantTestCase("5:g.138163255_138163256invTC", false, null, "inversion format does not allow specification of RefAllele"));
         }
+    }
+
+    private void setUpQueryToStubMaps(String variantQuery, boolean successfullyAnnotated, String alleleString)
+    {
+        variantToVepSuccessfullyAnnotated.put(variantQuery, successfullyAnnotated);
+        variantToVepAlleleString.put(variantQuery, alleleString);
+    }
+
+    private void setUpQueryToStubMaps()
+    {
+        // VEP responses for these test cases are extraced from queries to http://grch37.rest.ensembl.org/vep/human/hgvs/<variant>
+        // these contain only the elements neccessary for testing the business logic in VerifiedGenomicLocationAnnotationService
+        setUpQueryToStubMaps("5:g.138163256C>T", true, "C/T");
+        setUpQueryToStubMaps("5:g.138163256A>T", false, null);
+        setUpQueryToStubMaps("5:g.138163256>T", false, null);
+        setUpQueryToStubMaps("5:g.138163256delC", true, "C/-");
+        setUpQueryToStubMaps("5:g.138163256delA", true, "C/-");
+        setUpQueryToStubMaps("5:g.138163256del", true, "C/-");
+        setUpQueryToStubMaps("5:g.138163255_138163256delTC", true, "TC/-");
+        setUpQueryToStubMaps("5:g.138163255_138163256delCC", true, "TC/-");
+        setUpQueryToStubMaps("5:g.138163255_138163256delCCCC", true, "TC/-");
+        setUpQueryToStubMaps("5:g.138163255_138163256del", true, "TC/-");
+        setUpQueryToStubMaps("5:g.138163255_138163256insT", true, "-/T");
+        setUpQueryToStubMaps("5:g.138163255_138163256insTT", true, "-/TT");
+        setUpQueryToStubMaps("5:g.138163255_138163256ins", false, null);
+        setUpQueryToStubMaps("5:g.138163256delinsT", true, "C/T");
+        setUpQueryToStubMaps("5:g.138163256delCinsT", true, "C/T");
+        setUpQueryToStubMaps("5:g.138163256delAinsT", true, "C/T");
+        setUpQueryToStubMaps("5:g.138163256delinsC", false, null);
+        setUpQueryToStubMaps("5:g.138163256delinsTT", true, "C/TT");
+        setUpQueryToStubMaps("5:g.138163256delCinsTT", true, "C/TT");
+        setUpQueryToStubMaps("5:g.138163256delAinsTT", true, "C/TT");
+        setUpQueryToStubMaps("5:g.138163255_138163256delinsG", true, "TC/G");
+        setUpQueryToStubMaps("5:g.138163255_138163256delTCinsA", true, "TC/A");
+        setUpQueryToStubMaps("5:g.138163255_138163256delTAinsG", true, "TC/G");
+        setUpQueryToStubMaps("5:g.138163255_138163256delTCinsTC", false, null);
+        setUpQueryToStubMaps("5:g.138163255_138163256delTCinsTT", true, "C/T");
+        setUpQueryToStubMaps("5:g.138163255_138163256delTCinsGG", true, "TC/GG");
+        setUpQueryToStubMaps("5:g.138163255_138163256delCCinsTC", false, null);
+        setUpQueryToStubMaps("5:g.138163255_138163256delCCinsTT", true, "C/T");
+        setUpQueryToStubMaps("5:g.138163255_138163256delCCinsGG", true, "TC/GG");
+        setUpQueryToStubMaps("5:g.138163255_138163256delinsTC", false, null);
+        setUpQueryToStubMaps("5:g.138163255_138163256delinsTT", true, "C/T");
+        setUpQueryToStubMaps("5:g.138163255_138163256delinsGG", true, "TC/GG");
+        setUpQueryToStubMaps("5:g.138163255_138163256delCCCCinsTT", true, "C/T");
+        setUpQueryToStubMaps("5:g.138163255_138163256inv", true, "TC/GA");
+        setUpQueryToStubMaps("5:g.138163255_138163256invTC", false, null);
+    }
+
+    private VariantAnnotation stubAnnotation(String originalVariantQuery, String variant, boolean successfullyAnnotated, String alleleString)
+    {
+        VariantAnnotation stub = new VariantAnnotation();
+        stub.setOriginalVariantQuery(originalVariantQuery);
+        stub.setVariant(variant);
+        stub.setAlleleString(alleleString);
+        stub.setSuccessfullyAnnotated(successfullyAnnotated);
+        return stub;
+    }
+
+    private void stubHgvsVariantAnnotationServiceMethodsForType(List<VariantTestCase> variantTestCaseList)
+        throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException, TestCaseInsufficentlyModeledException
+    {
+        // create stubs for single variant queries, and begin building lists too
+        ArrayList<String> queryStringList = new ArrayList<String>();
+        ArrayList<VariantAnnotation> responseList = new ArrayList<VariantAnnotation>();
+        for (VariantTestCase testCase : variantTestCaseList) {
+            queryStringList.add(testCase.originalVariantQuery);
+            if (!variantToVepSuccessfullyAnnotated.containsKey(testCase.originalVariantQuery)) {
+                throw new TestCaseInsufficentlyModeledException("No Vep successfully_annotated stub defined for original_variant_query : " + testCase.originalVariantQuery);
+            }
+            Boolean successfullyAnnotatedStub = variantToVepSuccessfullyAnnotated.get(testCase.originalVariantQuery);
+            if (successfullyAnnotatedStub == null) {
+                throw new TestCaseInsufficentlyModeledException("No Vep successfully_annotated stub defined for original_variant_query : " + testCase.originalVariantQuery);
+            }
+            if (!variantToVepAlleleString.containsKey(testCase.originalVariantQuery)) {
+                throw new TestCaseInsufficentlyModeledException("No Vep allele_string stub defined for original_variant_query : " + testCase.originalVariantQuery);
+            }
+            String alleleStringStub = variantToVepAlleleString.get(testCase.originalVariantQuery); // null is an acceptable stub value for allele_string
+            VariantAnnotation response = stubAnnotation(
+                    testCase.originalVariantQuery,
+                    testCase.originalVariantQuery,
+                    successfullyAnnotatedStub,
+                    alleleStringStub);
+            responseList.add(response);
+            //response.setAnnotationJSON("{ \"originalVariantQuery\" : \"" + testCase.originalVariantQuery + "\", \"successfullyAnnotated\" : " + successfullyAnnotatedStub + ", \"allele\" : \"" + alleleStringStub + "\" }");
+            Mockito.when(hgvsVariantAnnotationService.getAnnotation(testCase.originalVariantQuery)).thenReturn(response);
+            Mockito.when(hgvsVariantAnnotationService.getAnnotation(testCase.originalVariantQuery, mockIsoformOverrideSource, mockTokenMap, mockFields)).thenReturn(response);
+        }
+        // create stubs for multi variant queries from built lists .. after jittering order
+        // order of response not guaranteed to match order of query - business logic should handle this properly
+        VariantAnnotation movedItem = responseList.remove(0);
+        responseList.add(movedItem); // first element is now last
+        Mockito.when(hgvsVariantAnnotationService.getAnnotations(queryStringList)).thenReturn(responseList);
+        Mockito.when(hgvsVariantAnnotationService.getAnnotations(queryStringList, mockIsoformOverrideSource, mockTokenMap, mockFields)).thenReturn(responseList);
+
+    }
+
+    private void setUpServiceStubs()
+        throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException, TestCaseInsufficentlyModeledException
+    {
+        setUpQueryToStubMaps();
+        stubHgvsVariantAnnotationServiceMethodsForType(hgvsSubstitutions);
+        stubHgvsVariantAnnotationServiceMethodsForType(hgvsDeletions);
+        stubHgvsVariantAnnotationServiceMethodsForType(hgvsInsertions);
+        stubHgvsVariantAnnotationServiceMethodsForType(hgvsInsertionDeletions);
+        stubHgvsVariantAnnotationServiceMethodsForType(hgvsInversions);
     }
 
     private void runTestSetByVariantString(List<VariantTestCase> variantTestCaseList, boolean supplyOtherParameters)
@@ -145,30 +260,62 @@ public class VerifiedHgvsVariantAnnotationServiceTest
         for (VariantTestCase testCase : variantTestCaseList) {
             VariantAnnotation testResponse = null;
             if (supplyOtherParameters) {
-                testResponse = variantAnnotationService.getAnnotation(testCase.originalVariantQuery, mockIsoformOverrideSource, mockTokenMap, mockFields);
+                testResponse = verifiedHgvsVariantAnnotationService.getAnnotation(testCase.originalVariantQuery, mockIsoformOverrideSource, mockTokenMap, mockFields);
             } else {
-                testResponse = variantAnnotationService.getAnnotation(testCase.originalVariantQuery);
+                testResponse = verifiedHgvsVariantAnnotationService.getAnnotation(testCase.originalVariantQuery);
             }
-            assertEquals(testCase.originalVariantQuery + " : response query field does not match request query string", testCase.originalVariantQuery, testResponse.getOriginalVariantQuery());
+            Assert.assertEquals(testCase.originalVariantQuery + " : response query field does not match request query string", testCase.originalVariantQuery, testResponse.getOriginalVariantQuery());
             if (testCase.expectedGnSuccessfullyAnnotated) {
-                assertTrue(testCase.originalVariantQuery + " : expected successful annotation", testResponse.isSuccessfullyAnnotated());
+                Assert.assertTrue(testCase.originalVariantQuery + " : expected successful annotation", testResponse.isSuccessfullyAnnotated());
             } else {
-                assertFalse(testCase.originalVariantQuery + " : expected failed annotation", testResponse.isSuccessfullyAnnotated());
+                Assert.assertFalse(testCase.originalVariantQuery + " : expected failed annotation", testResponse.isSuccessfullyAnnotated());
             }
             if (testResponse.isSuccessfullyAnnotated()) {
-                assertEquals(testCase.originalVariantQuery + " : Variant Allele comparison", testCase.expectedGnAlleleString, testResponse.getAlleleString());
+                Assert.assertEquals(testCase.originalVariantQuery + " : Variant Allele comparison", testCase.expectedGnAlleleString, testResponse.getAlleleString());
             }
         }
     }
 
-    // Tests of the getVarant(String) function
+    private void runTestSetByVariantList(List<VariantTestCase> variantTestCaseList, boolean supplyOtherParameters)
+        throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
+    {
+        // make list of variant query strings and submit
+        List<String> queryHgvsList = variantTestCaseList.stream().map(t -> t.originalVariantQuery).collect(Collectors.toList());
+        List<VariantAnnotation> variantResponse = null;
+        if (supplyOtherParameters) {
+            variantResponse = verifiedHgvsVariantAnnotationService.getAnnotations(queryHgvsList, mockIsoformOverrideSource, mockTokenMap, mockFields);
+        } else {
+            variantResponse = verifiedHgvsVariantAnnotationService.getAnnotations(queryHgvsList);
+        }
+        // check each element of response against expectations
+        HashMap<String, VariantAnnotation> queryToResponse = new HashMap<String, VariantAnnotation>();
+        for (VariantAnnotation responseElement : variantResponse) {
+            if (queryToResponse.put(responseElement.getOriginalVariantQuery(), responseElement) != null) {
+                Assert.fail("More than one response received for query string " + responseElement.getOriginalVariantQuery());
+            }
+        }
+        for (VariantTestCase testCase : variantTestCaseList) {
+            VariantAnnotation testResponse = queryToResponse.get(testCase.originalVariantQuery);
+            if (testResponse == null) {
+                Assert.fail("Response did not include record for query string " + testCase.originalVariantQuery);
+            }
+            if (testCase.expectedGnSuccessfullyAnnotated) {
+                Assert.assertTrue(testCase.originalVariantQuery + " : expected successful annotation", testResponse.isSuccessfullyAnnotated());
+            } else {
+                Assert.assertFalse(testCase.originalVariantQuery + " : expected failed annotation", testResponse.isSuccessfullyAnnotated());
+            }
+            if (testResponse.isSuccessfullyAnnotated()) {
+                Assert.assertEquals(testCase.originalVariantQuery + " : Variant Allele comparison", testCase.expectedGnAlleleString, testResponse.getAlleleString());
+            }
+        }
+    }
+
+    // Tests of the getAnnotation(String) function
 
     @Test
     public void getAnnotationForSubstitutionsByVariantString()
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
-        initializeTestCasesIfNeeded();
-        mockHgvsVariantAnnotationServiceMethods();
         runTestSetByVariantString(hgvsSubstitutions, false);
     }
 
@@ -176,8 +323,6 @@ public class VerifiedHgvsVariantAnnotationServiceTest
     public void getAnnotationForDeletionsByVariantString()
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
-        initializeTestCasesIfNeeded();
-        mockHgvsVariantAnnotationServiceMethods();
         runTestSetByVariantString(hgvsDeletions, false);
     }
 
@@ -185,8 +330,6 @@ public class VerifiedHgvsVariantAnnotationServiceTest
     public void getAnnotationForInsertionsByVariantString()
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
-        initializeTestCasesIfNeeded();
-        mockHgvsVariantAnnotationServiceMethods();
         runTestSetByVariantString(hgvsInsertions, false);
     }
 
@@ -194,8 +337,6 @@ public class VerifiedHgvsVariantAnnotationServiceTest
     public void getAnnotationForInsertionDeletionsByVariantString()
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
-        initializeTestCasesIfNeeded();
-        mockHgvsVariantAnnotationServiceMethods();
         runTestSetByVariantString(hgvsInsertionDeletions, false);
     }
 
@@ -203,19 +344,15 @@ public class VerifiedHgvsVariantAnnotationServiceTest
     public void getAnnotationForInversionsByVariantString()
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
-        initializeTestCasesIfNeeded();
-        mockHgvsVariantAnnotationServiceMethods();
         runTestSetByVariantString(hgvsInversions, false);
     }
 
-    // Tests of the getVarant(String, overrideSource, tokenMap, fields) function
+    // Tests of the getAnnotation(String, overrideSource, tokenMap, fields) function
 
     @Test
     public void getAnnotationForSubstitutionsByVariantStringWithArgs()
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
-        initializeTestCasesIfNeeded();
-        mockHgvsVariantAnnotationServiceMethods();
         runTestSetByVariantString(hgvsSubstitutions, true);
     }
 
@@ -223,8 +360,6 @@ public class VerifiedHgvsVariantAnnotationServiceTest
     public void getAnnotationForDeletionsByVariantStringWithArgs()
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
-        initializeTestCasesIfNeeded();
-        mockHgvsVariantAnnotationServiceMethods();
         runTestSetByVariantString(hgvsDeletions, true);
     }
 
@@ -232,8 +367,6 @@ public class VerifiedHgvsVariantAnnotationServiceTest
     public void getAnnotationForInsertionsByVariantStringWithArgs()
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
-        initializeTestCasesIfNeeded();
-        mockHgvsVariantAnnotationServiceMethods();
         runTestSetByVariantString(hgvsInsertions, true);
     }
 
@@ -241,8 +374,6 @@ public class VerifiedHgvsVariantAnnotationServiceTest
     public void getAnnotationForInsertionDeletionsByVariantStringWithArgs()
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
-        initializeTestCasesIfNeeded();
-        mockHgvsVariantAnnotationServiceMethods();
         runTestSetByVariantString(hgvsInsertionDeletions, true);
     }
 
@@ -250,45 +381,81 @@ public class VerifiedHgvsVariantAnnotationServiceTest
     public void getAnnotationForInversionsByVariantStringWithArgs()
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
-        initializeTestCasesIfNeeded();
-        mockHgvsVariantAnnotationServiceMethods();
         runTestSetByVariantString(hgvsInversions, true);
     }
 
-    private void mockHgvsVariantAnnotationServiceMethodsForType(List<VariantTestCase> variantTestCaseList)
+    // Tests of the getAnnotation(List<String>) function
+
+    @Test
+    public void getAnnotationForSubstitutionsByVariantLists()
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
-        for (VariantTestCase testCase : variantTestCaseList) {
-            VariantAnnotation response = createAnnotation(
-                    testCase.originalVariantQuery,
-                    testCase.originalVariantQuery,
-                    testCase.vepSuccessfullyAnnotated,
-                    testCase.vepAlleleString);
-            Mockito.when(hgvsVariantAnnotationService.getAnnotation(testCase.originalVariantQuery)).thenReturn(response);
-            Mockito.when(hgvsVariantAnnotationService.getAnnotation(testCase.originalVariantQuery, mockIsoformOverrideSource, mockTokenMap, mockFields)).thenReturn(response);
-        }
+        runTestSetByVariantList(hgvsSubstitutions, false);
     }
 
-    private void mockHgvsVariantAnnotationServiceMethods()
+    @Test
+    public void getAnnotationForDeletionsByVariantLists()
         throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
-        initializeTestCasesIfNeeded();
-        // mock methods in order to prevent hitting the live VEP web API
-        mockHgvsVariantAnnotationServiceMethodsForType(hgvsSubstitutions);
-        mockHgvsVariantAnnotationServiceMethodsForType(hgvsDeletions);
-        mockHgvsVariantAnnotationServiceMethodsForType(hgvsInsertions);
-        mockHgvsVariantAnnotationServiceMethodsForType(hgvsInsertionDeletions);
-        mockHgvsVariantAnnotationServiceMethodsForType(hgvsInversions);
+        runTestSetByVariantList(hgvsDeletions, false);
     }
 
-    private VariantAnnotation createAnnotation(String originalVariantQuery, String variant, boolean successfullyAnnotated, String alleleString)
+    @Test
+    public void getAnnotationForInsertionsByVariantLists()
+        throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
     {
-        VariantAnnotation annotation = new VariantAnnotation();
-        annotation.setOriginalVariantQuery(originalVariantQuery);
-        annotation.setVariant(variant);
-        annotation.setAlleleString(alleleString);
-        annotation.setSuccessfullyAnnotated(successfullyAnnotated);
-        return annotation;
+        runTestSetByVariantList(hgvsInsertions, false);
+    }
+
+    @Test
+    public void getAnnotationForInsertionDeletionsByVariantLists()
+        throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
+    {
+        runTestSetByVariantList(hgvsInsertionDeletions, false);
+    }
+
+    @Test
+    public void getAnnotationForInversionsByVariantLists()
+        throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
+    {
+        runTestSetByVariantList(hgvsInversions, false);
+    }
+
+    // Tests of the getAnnotations(List<String>, overrideSource, tokenMap, fields) function
+
+    @Test
+    public void getAnnotationForSubstitutionsByVariantListWithArgs()
+        throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
+    {
+        runTestSetByVariantList(hgvsSubstitutions, true);
+    }
+
+    @Test
+    public void getAnnotationForDeletionsByVariantListWithArgs()
+        throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
+    {
+        runTestSetByVariantList(hgvsDeletions, true);
+    }
+
+    @Test
+    public void getAnnotationForInsertionsByVariantListWithArgs()
+        throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
+    {
+        runTestSetByVariantList(hgvsInsertions, true);
+    }
+
+    @Test
+    public void getAnnotationForInsertionDeletionsByVariantListWithArgs()
+        throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
+    {
+        runTestSetByVariantList(hgvsInsertionDeletions, true);
+    }
+
+    @Test
+    public void getAnnotationForInversionsByVariantListWithArgs()
+        throws VariantAnnotationWebServiceException, VariantAnnotationNotFoundException
+    {
+        runTestSetByVariantList(hgvsInversions, true);
     }
 
 }
