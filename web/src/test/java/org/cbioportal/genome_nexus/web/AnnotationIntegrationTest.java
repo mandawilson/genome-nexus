@@ -68,7 +68,6 @@ public class AnnotationIntegrationTest
 
     private List<Map<String, Object>> fetchVariantAnnotationWithMyVariantInfoByGenomicLocationPOST(GenomicLocation[] genomicLocations)
     {
-        System.out.println(">>>>>>>>>>>INTEGRATION TEST POST TO : " + BASE_URL_GENOMIC_LOCATION + "?" + MY_VARIANT_INFO_FIELD); 
         String responses = this.restTemplate.postForObject(BASE_URL_GENOMIC_LOCATION + "?" + MY_VARIANT_INFO_FIELD, genomicLocations, String.class);
         JsonParser springParser = JsonParserFactory.getJsonParser();
         return (List<Map<String, Object>>)(List<?>) springParser.parseList(responses);
